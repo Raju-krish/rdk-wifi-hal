@@ -996,7 +996,7 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
     unsigned int total_len=0;
     bool send_mgmt_to_char_dev = false;
 #endif
-    u16 reasoncode;
+    u16 reasoncode = reason;
     if (mgmt == NULL) {
         return -1;
     }
@@ -1211,6 +1211,9 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
                 to_mac_str(mgmt->da, frame_da_str), len, reason);
         }
 
+        bool is_fc_wep_missing = (len >= IEEE80211_HDRLEN + sizeof(mgmt->u.disassoc)) &&
+                                  (le_to_host16(mgmt->u.disassoc.reason_code) == WIFI_REASON_FC_WEP_BIT_MISSING);
+
         pthread_mutex_lock(&g_wifi_hal.hapd_lock);
         station = ap_get_sta(&interface->u.ap.hapd, sta);
         if (station) {
@@ -1222,7 +1225,10 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
                 reason = station->disconnect_reason_code;
             }
 #endif
-            ap_free_sta(&interface->u.ap.hapd, station);
+            /* Skip ap_free_sta for FC_WEP_BIT_MISSING: OneWifi decides whether to act. */
+            if (!is_fc_wep_missing) {
+                ap_free_sta(&interface->u.ap.hapd, station);
+            }
         } else {
             wifi_hal_dbg_print("%s:%d: interface:%s sta %s not found\n", __func__, __LINE__,
                 interface->name, to_mac_str(sta, sta_mac_str));
@@ -1254,6 +1260,11 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
             wifi_hal_dbg_print("%s:%d: Send Client Disassoc steering event\n", __func__, __LINE__);
 
             callbacks->steering_event_callback(0, &steering_evt);
+        }
+        /* For FC_WEP=0 disassoc notifications,  only notify OneWifi via disassoc_cb. Do NOT forward to hostapd
+         */
+        if (reasoncode == WIFI_REASON_FC_WEP_BIT_MISSING) {
+            forward_frame = false;
         }
 #ifdef WIFI_EMULATOR_CHANGE
         send_mgmt_to_char_dev = true;
