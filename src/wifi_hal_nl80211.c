@@ -2245,6 +2245,15 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
         if (callbacks->steering_event_callback != 0) {
             handle_disconnect_event_for_bm(interface, sta, mgmt_type, reason);
         }
+        /* For FC_WEP=0 disassoc notifications (reason=WLAN_FC_WEP_BIT_MISSING), only notify
+         * upper layers via disassoc_cb. Do NOT forward to hostapd — that causes hostapd to
+         * call ap_free_sta and send a deauth, creating a re-association loop when OneWifi
+         * decides not to take action (e.g. STA already has an IP address).
+         */
+        if (reasoncode == 102) {
+            forward_frame = false;
+	    wifi_hal_info_print("%s:%d [RAJA] Setting forward_frame as %d\n", forward_frame);
+        }
 #ifdef WIFI_EMULATOR_CHANGE
         send_mgmt_to_char_dev = true;
 #endif
