@@ -1140,6 +1140,9 @@ static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, str
 
     if (wifi_chan_event_type == WIFI_EVENT_CHANNELS_CHANGED && radio->prev_channel == channel &&
         radio->prev_channelWidth == l_channel_width) {
+        wifi_hal_info_print(
+            "%s:%d: suppress duplicate channel notification radio:%d channel:%d width:%d\n",
+            __func__, __LINE__, interface->vap_info.radio_index, channel, l_channel_width);
         return;
     }
     radio->prev_channel = channel;
@@ -1168,7 +1171,18 @@ static void nl80211_ch_switch_notify_event(wifi_interface_info_t *interface, str
         radio_channel_param.channel = channel;
         radio_channel_param.channelWidth = l_channel_width;
         radio_channel_param.op_class = op_class;
+        wifi_hal_info_print(
+            "%s:%d: dispatch channel event radio:%d event:%d sub_event:%d channel:%d width:%d configuration_in_progress:%d\n",
+            __func__, __LINE__, radio_channel_param.radioIndex, radio_channel_param.event,
+            radio_channel_param.sub_event, radio_channel_param.channel,
+            radio_channel_param.channelWidth, radio->configuration_in_progress);
         callbacks->channel_change_event_callback(radio_channel_param);
+    } else if (wifi_chan_event_type == WIFI_EVENT_CHANNELS_CHANGED) {
+        wifi_hal_info_print(
+            "%s:%d: channel event not dispatched radio:%d callback_available:%d sub_event:%d\n",
+            __func__, __LINE__, interface->vap_info.radio_index,
+            callbacks != NULL && callbacks->channel_change_event_callback != NULL,
+            radio_channel_param.sub_event);
     }
 
 }

@@ -936,6 +936,15 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
 
     is_channel_changed = radio->oper_param.channel != operationParam->channel ||
         radio->oper_param.channelWidth != operationParam->channelWidth;
+    if (is_channel_changed ||
+        radio->oper_param.autoChannelEnabled != operationParam->autoChannelEnabled) {
+        wifi_hal_info_print(
+            "%s:%d: radio config request radio:%d configured:%d channel:%d->%d width:%d->%d auto_channel:%d->%d config_in_progress:%d\n",
+            __func__, __LINE__, index, radio->configured, radio->oper_param.channel,
+            operationParam->channel, radio->oper_param.channelWidth,
+            operationParam->channelWidth, radio->oper_param.autoChannelEnabled,
+            operationParam->autoChannelEnabled, radio->configuration_in_progress);
+    }
     if (radio->configured && radio->oper_param.enable && is_channel_changed) {
         radio->oper_param.channel = operationParam->channel;
         radio->oper_param.operatingClass = operationParam->operatingClass;
@@ -1014,6 +1023,9 @@ INT wifi_hal_setRadioOperatingParameters(wifi_radio_index_t index, wifi_radio_op
 try_hostap_config_update:
     if (radio->configured && is_channel_changed) {
         radio->configuration_in_progress = true;
+        wifi_hal_info_print(
+            "%s:%d: radio configuration started radio:%d channel:%d width:%d\n", __func__,
+            __LINE__, index, operationParam->channel, operationParam->channelWidth);
     }
     if (radio->configured && radio->oper_param.enable) {
         update_hostap_radio_param(radio, operationParam);
@@ -1081,6 +1093,9 @@ Exit:
 
 #endif // defined(FEATURE_HOSTAP_MGMT_FRAME_CTRL) &&  (HOSTAPD_VERSION >= 210)
     radio->configuration_in_progress = false;
+    wifi_hal_info_print(
+        "%s:%d: radio config request path completed radio:%d requested_channel:%d requested_width:%d return:success\n",
+        __func__, __LINE__, index, operationParam->channel, operationParam->channelWidth);
     return RETURN_OK;
 
 reload_config:
@@ -1092,16 +1107,24 @@ reload_config:
     if (update_hostap_config_params(radio) != RETURN_OK ) {
         wifi_hal_error_print("%s:%d:Failed to update hostap config params, Got into a bad state radioindex : %d\n", __func__, __LINE__, index);
         radio->configuration_in_progress = false;
+        wifi_hal_error_print(
+            "%s:%d: radio configuration failed radio:%d stage:update_hostap_config_params\n",
+            __func__, __LINE__, index);
         return RETURN_ERR;
     }
 
     if (nl80211_update_wiphy(radio) != 0) {
         wifi_hal_error_print("%s:%d:Failed to update radio : %d\n", __func__, __LINE__, index);
         radio->configuration_in_progress = false;
+        wifi_hal_error_print(
+            "%s:%d: radio configuration failed radio:%d stage:nl80211_update_wiphy\n",
+            __func__, __LINE__, index);
         return RETURN_ERR;
     }
 
     radio->configuration_in_progress = false;
+    wifi_hal_error_print("%s:%d: radio configuration rolled back radio:%d\n", __func__,
+        __LINE__, index);
     return RETURN_ERR;
 
 }
